@@ -7,6 +7,7 @@ my $config = {
   defaultEncoding => 'insane',
   isDebug         => 1,
 };
+
 ConvertFilesToMP3->new($config)->run(@_);
 
 package ConvertFilesToMP3;
