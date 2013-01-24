@@ -209,7 +209,7 @@ sub run {
     if $sourcePath ne $targetPath;
   
   my $lameParams = join ' ', @outParams;
-  my $fadeMessage = $fadeParams
+  my $fadeMessage = $self->{fadeParams}
     ? "Fade params were specified, and can only applied to wav files.
 If the source files are mp3, the fade params will be ignored."
     : '';
@@ -289,10 +289,16 @@ sub workDir {
   my $level       = shift || 1;
   
   my $flacBinaryPath  = $self->{flacBinaryPath};
+  my $soxBinaryPath   = $self->{soxBinaryPath};
   my $maxNestingLevel = $self->{maxNestingLevel};
   my $minFileSize     = $self->{minFileSize};
   my $fadeParams      = $self->{fadeParams};
-  
+  if ($fadeParams) {
+    $self->quit("No soxBinaryPath defined")
+      if ! $soxBinaryPath;
+    $self->quit("The soxBinaryPath is not valid: $soxBinaryPath")
+      if ! -e $soxBinaryPath;
+  }
   return if $maxNestingLevel < $level;
   if (! -e $targetPath) {
     mkdir($targetPath, 0777)
