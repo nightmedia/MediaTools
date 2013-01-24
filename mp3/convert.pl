@@ -11,6 +11,7 @@ ConvertFilesToMP3->new($config)->run(@_);
 
 package ConvertFilesToMP3;
 use strict;
+use warnings;
 use Cwd;
 use Config;
 use File::Copy;
