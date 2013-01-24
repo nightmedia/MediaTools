@@ -40,23 +40,24 @@ The script relies on a few external binaries, listed below.
 This is the MP3 encoder, a command-line application. 
 The latest version can be compiled from source, which can be retrieved here:
 
- http://lame.sourceforge.net/download.php
+L<http://lame.sourceforge.net/download.php>
 
 For Windows users, the pre-compiled binary can be downloaded from here:
 
- http://www.free-codecs.com/download/lame_encoder.htm
+L<http://www.free-codecs.com/download/lame_encoder.htm>
 
 =item FLAC encoder
 
 I<Optional>
 
-This binary can be used to convert flac files to wav files, which 
-can be then used as a source by the lame encoder to create the MP3 files.
+This command-line binary can be used to convert flac files to wav files, 
+which can be then used as a source by the lame encoder to create 
+the MP3 files.
 
 The source code and the pre-compiled binaries for all platforms
 can be downloaded here:
 
- http://flac.sourceforge.net/download.html
+L<http://flac.sourceforge.net/download.html>
 
 =item Sound eXchange audio editor
 
@@ -68,9 +69,10 @@ to apply fade-in and fade-out for each track.
 The source code and the pre-compiled binaries for all platforms
 can be downloaded here:
 
- http://sox.sourceforge.net/
+L<http://sox.sourceforge.net/>
 
 =back
+
 
 =head1 Usage
 
@@ -96,7 +98,7 @@ Examples of using acceptable values:
  preset=insane
  preset="fast extreme"
 
-Bitrate overview (mostly based on LAME 3.98.2 results)  
+Bitrate overview (mostly based on LAME 3.98.2 results)
 
  Switch  Preset                  Target Kbit/s  Bitrate range kbit/s  
  -b 320  --preset insane         320            320 CBR
@@ -111,6 +113,7 @@ Bitrate overview (mostly based on LAME 3.98.2 results)
  -V 8                            85             70...105
  -V 9                            65             45...85
 
+See L<http://wiki.hydrogenaudio.org/index.php?title=LAME> for more info.
 
 =item tags
 
@@ -146,9 +149,12 @@ to set the track number field.
 When specified, this will rely on sox (http://sox.sourceforge.net/) to apply
 fade-in and fade-out. You can specify these params as:
 
- fade=in:0.5,out:2.5
+ fade=in:0.5,out:2.5,trim:0.9
 
-This will fade in for half a second, and fade out for 2.5 seconds.
+This will fade in for half a second, and fade out for 2.5 seconds, then trim
+the last 0.9s from the end of the file. Trim is usually required 
+with longer fades because due to the nature of the fading curve 
+applied to the sound, most of the second half of the fade period is silent.
 
 The fade can be applied only to wav files.
 
@@ -163,9 +169,10 @@ This will use "lame --preset cbr 160" on all the files in the path:
 
  convert.pl "c:/Media files/myFolder" preset="cbr 160"
 
-You can also provide a target folder
+You can also provide a target folder, and if it does not contain spaces,
+the path can be specified without quotes:
 
- convert.pl "c:/Media files/myFolder" "c:/Target folder" preset="cbr 160"
+ convert.pl "c:/Media files/myFolder" c:/Target/Folder preset="cbr 160"
 
 If you need to fade-in/fade-out every track, you can also provide
 the parameters that will be used by SOX:
@@ -183,8 +190,9 @@ sub new {
   my $self    = shift;
   my $os = $^O || $Config::Config{'osname'};
   $self->{isDebug}           ||= 0;
-  $self->{lameBinaryPath}    ||= 'c:/apps/lame/lame.exe';
-  $self->{flacBinaryPath}    ||= 'c:/apps/flac/flac.exe';
+  $self->{lameBinaryPath}    ||= 'lame';
+  $self->{flacBinaryPath}    ||= 'flac';
+  $self->{soxBinaryPath}     ||= 'sox',
   $self->{defaultEncoding}   ||= 'insane';
   # How many folders deep to go look for files
   $self->{maxNestingLevel}   ||= 10;
@@ -213,15 +221,25 @@ sub run {
   my $isDebug           = $self->{isDebug};
   
   if ($targetPath =~ /=/) {
+    # We don't have a second path, the next argument is a param=value
     unshift @otherParams, $targetPath;
     $targetPath = $sourcePath;
   }
+<<<<<<< HEAD
   my $inParams  = join ' ', @otherParams;
+=======
+  my $inParams = join ' ', @otherParams;
+  my %params;
+  # If the params have spaces, they are in quotes
+  $inParams =~ s{(\w+)=(?:"(.+?)"|(\S*))} {
+    $params{lc $1}=defined $2 ? $2 : defined $3 ? $3 : '';
+  }ge;
+>>>>>>> Changes to documentation and code
   
   my (@messages, @errors);
-  my $opParams  = $self->{opParams} = {};
-  my @outParams = @$defaultLameParams;
-  my @buildTags = ('id3');
+  my $opParams   = $self->{opParams} = {};
+  my @outParams  = @$defaultLameParams;
+  my @tagsSource = qw(id3 );
   
   $sourcePath = $self->makeAbsolutePath($sourcePath);
   $targetPath = $self->makeAbsolutePath($targetPath);
@@ -231,12 +249,13 @@ sub run {
   
   if (! -e $targetPath) {
     mkdir($targetPath, 0777)
-      || $self->end("Could not create path($targetPath):".$!);
+      || $self->end("Could not create path($targetPath): ".$!);
   }
+  my $preset     = $params{preset} || '';
+  my $tagsSource = $params{tags}   || '';
+  my $fadeParams = $params{fade}   || '';
   
-  if ($inParams =~ /preset=(".+?"|\S+)/) {
-    my $preset = $1;
-    $preset    = $1 if $preset =~ /^"(.+)"$/;
+  if ($preset) {
     push @outParams, '--preset '.$preset;
   }
   else {
@@ -244,22 +263,22 @@ sub run {
     push @outParams, '--preset '.$defaultEncoding;
   }
   
-  if ($inParams =~ /tags=(\S+)/) {
-    @buildTags = split ',', lc $1;
-    foreach(@buildTags) {
+  if ($tagsSource) {
+    @tagsSource = split ',', lc $tagsSource;
+    foreach(@tagsSource) {
       $_ =~ s/^\s+//;
       $_ =~ s/\s+$//;
       $self->end("Invalid tag param: ".$_)
-        if $_ !~ /^(id3|name|path)/o;
+        if $_ !~ /^(id3|name|path)/;
     }
-    push @messages, "The tags will be built from: ".(join ', then ', @buildTags);
+    push @messages, "The tags will be built from: ".(join ', then ', @tagsSource);
   }
   
-  if ($inParams =~ /fade=(\S+)/) {
+  if ($fadeParams) {
     # fade=in:0.5,out:2.5
     my %fade;
-    my @fadeParams = split /,/, $1;
-    map {$fade{lc $1} = $2 if $_ =~ /(in|out)=(\d+|\d*\.\d+)/i} @fadeParams;
+    my @fadeParams = map {$_=~ /^\s+//; $_=~ /\s+$//; $_} split /,/, $fadeParams;
+    map {$fade{lc $1} = $2 if $_ =~ /(in|out|trim)=(\d+|\d*\.\d+)/i} @fadeParams;
     $self->{fadeParams} = \%fade if %fade;
   }
   
@@ -269,7 +288,7 @@ sub run {
   my $lameParams = join ' ', @outParams;
   my $fadeMessage = $self->{fadeParams}
     ? "Fade params were specified, and can only applied to wav files.
-If the source files are mp3, the fade params will be ignored."
+If the source files are mp3, the fade params will be ignored.\n"
     : '';
   print ''.("=" x 60)."\n"
     .(join "\n\n", @messages)
@@ -283,7 +302,7 @@ You have 5 seconds to stop this...\n~;
   sleep 5;
   
   $opParams->{-LAME_PARAMS} = $lameParams;
-  $opParams->{-BUILD_TAGS}  = \@buildTags;
+  $opParams->{-ID3V2_TAGS}  = \@tagsSource;
   
   $self->workDir($sourcePath, $targetPath);
   $self->printMessages();
@@ -366,7 +385,7 @@ sub workDir {
   
   my ($dh, @errors, @messages);
   my $opParams   = $self->{opParams};
-  my $buildTags  = $opParams->{-BUILD_TAGS};
+  my $tagsSource = $opParams->{-ID3V2_TAGS};
   my $lameParams = $opParams->{-LAME_PARAMS};
   
   if (! opendir ($dh, $currentPath)) {
@@ -400,7 +419,7 @@ sub workDir {
       
       print "CONVERT: $fileName\n";
       
-      my $message = $self->encodeFile($sourceFile, $targetFile, $lameParams, $buildTags);
+      my $message = $self->encodeFile($sourceFile, $targetFile, $lameParams, $tagsSource);
       if ($message) {
         push @messages, $fileName;
         push @messages, @$message;
@@ -467,7 +486,7 @@ sub workDir {
           $sourceFile = $tempTargetFile;
         }
       }
-      my $message = $self->encodeFile($sourceFile, $targetFile, $lameParams, $buildTags);
+      my $message = $self->encodeFile($sourceFile, $targetFile, $lameParams, $tagsSource);
       
       unlink $targetFileWav  if $targetFileWav;
       unlink $tempTargetFile if $tempTargetFile;
@@ -577,7 +596,8 @@ sub getTagsFromName {
     $fileName          = $1;
     push @$messages, "=N= Album year: $2";
   }
-  
+  # 01 - Artist - Album Name - Track Name.mp3
+  # 01_-_Artist_-_Album_Name_-_Track_Name.mp3
   my @fileName = map {
     $_ =~ s/_/ /g;
     $_ =~ s/\s+/ /g;
@@ -618,7 +638,7 @@ sub encodeFile {
   my $sourceFile = shift;
   my $targetFile = shift;
   my $lameParams = shift;
-  my $buildTags  = shift;
+  my $tagsSource = shift;
   my @messages;
   my $lameBinaryPath = $self->{lameBinaryPath};
   # These are the params as defined by the MP3::Info
@@ -632,20 +652,20 @@ sub encodeFile {
     TRACKNUM => '',
     COMMENT  => '',
   );
-  my %buildTags = map { $_ => 1 } @$buildTags;
+  my %tagsSource = map { $_ => 1 } @$tagsSource;
   
-  my $tagFromID3  = $buildTags{'id3'}
+  my $tagFromID3  = $tagsSource{id3}
     ? $self->getTagsFromID3($sourceFile, \@messages)  || {}
     : {};
-  my $tagFromPath = $buildTags{'path'}
+  my $tagFromPath = $tagsSource{path}
     ? $self->getTagsFromPath($sourceFile, \@messages) || {}
     : {};
-  my $tagFromName = $buildTags{'name'}
+  my $tagFromName = $tagsSource{name}
     ? $self->getTagsFromName($sourceFile, \@messages) || {}
     : {};
   
   foreach $x(@mp3Params) {
-    foreach $tagSource(@$buildTags) {
+    foreach $tagSource(@$tagsSource) {
       # Once defined, a tag cannot be overriden
       next if exists $tag{$x} && defined $tag{$x} && $tag{$x} ne '';
       
@@ -659,29 +679,31 @@ sub encodeFile {
         $tag{$x} = $tagFromName->{$x} if exists $tagFromName->{$x} && defined $tagFromName->{$x};
       }
       $tag{$x} = $defaultTag{$x} if ! exists $tag{$x} || ! defined $tag{$x} || $tag{$x} eq '';
-      $tag{$x} =~ s/\s+$//;
-      $tag{$x} =~ s/\s+/ /;
-      $tag{$x} =~ s/^\s+//;
-      $tag{$x} =~ s/\s+$//;
-      $tag{$x} =~ s/^\((.*)\)$/$1/;
-      $tag{$x} =~ s/^\[(.*)\]$/$1/;
-      $tag{$x} =~ s/^\s+//;
-      $tag{$x} =~ s/\s+$//;
-      $tag{$x} =~ s/[|\\\/]/~/g; # use "~" instead of one of the following: | / \
-      $tag{$x} =~ s/"/'/g; # use ' instead of "
+      $tag{$x} =~ s/^\((.*)\)$/ $1 /; # Remove round braces
+      $tag{$x} =~ s/^\[(.*)\]$/ $1 /; # and square braces
+      $tag{$x} =~ s/\s+/ /g;          # Replace multiple space-type chars with one space
+      $tag{$x} =~ s/^\s+//;           # Strip leading spaces
+      $tag{$x} =~ s/\s+$//;           # and trailing spaces
+      $tag{$x} =~ s/[|\\\/]/~/g;      # use "~" instead of one of the following: | / \
+      $tag{$x} =~ s/"/'/g;            # use ' instead of "
       push @messages, "=== $x($tagSource)=$tag{$x}" if $tag{$x} ne '';
     }
   }
-  $tag{'TRACKNUM'} = $1
-    if $tag{'TRACKNUM'} =~ /(\d+)\D/;
+  $tag{'TRACKNUM'} = $1 if $tag{'TRACKNUM'} =~ /(\d+)\D/;
+  my %tagFlag = (
+    TITLE    => tt,
+    YEAR     => ty,
+    ARTIST   => ta,
+    ALBUM    => tl,
+    GENRE    => tg,
+    TRACKNUM => tn,
+    COMMENT  => tc,
+  );
   
-  $lameParams .= qq~ --tt "$tag{'TITLE'}"~    if $tag{'TITLE'}    ne '';
-  $lameParams .= qq~ --ty "$tag{'YEAR'}"~     if $tag{'YEAR'}     ne '';
-  $lameParams .= qq~ --ta "$tag{'ARTIST'}"~   if $tag{'ARTIST'}   ne '';
-  $lameParams .= qq~ --tl "$tag{'ALBUM'}"~    if $tag{'ALBUM'}    ne '';
-  $lameParams .= qq~ --tg "$tag{'GENRE'}"~    if $tag{'GENRE'}    ne '';
-  $lameParams .= qq~ --tn "$tag{'TRACKNUM'}"~ if $tag{'TRACKNUM'} ne '';
-  $lameParams .= qq~ --tc "$tag{'COMMENT'}"~  if $tag{'COMMENT'}  ne '';
+  $lameParams .= join '',
+    map {sprintf ' --%s "%s"',$tagFlag{$_}, $tag{$_}}
+    grep {$tag{$_} ne ''}
+    sort keys %tagFlag;
   
   if ($self->{isWin32}) {
     $sourceFile =~ s/\//\\/g;

@@ -38,7 +38,7 @@ L<http://www.free-codecs.com/download/lame_encoder.htm>
 
 I<Optional>
 
-This binary can be used to convert flac files to wav files, which 
+This command-line binary can be used to convert flac files to wav files, which 
 can be then used as a source by the lame encoder to create the MP3 files.
 
 The source code and the pre-compiled binaries for all platforms
