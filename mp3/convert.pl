@@ -24,31 +24,66 @@ This script can be used to convert media files found in a folder structure
 to mp3 files, given a certain resolution/preset.
 
 The script will attempt to preserve the ID3/ID3V2 tags if found,
-or generate tags based on the folder structure (Artist/Album)
+or generate tags based on the folder structure (Artist/Album).
+
+For efficient tagging, the script uses MP3::Info to read tags 
+from the source files. If this package is not installed and tagging
+is explicitly expected to be read from source files, the script will fail.
+
+The script relies on a few external binaries, listed below.
+
+=over
+
+=item Lame MP3
+
+This is the MP3 encoder, a command-line application. 
+The latest version can be compiled from source, which can be retrieved here:
+
+ http://lame.sourceforge.net/download.php
+
+For Windows users, the pre-compiled binary can be downloaded from here:
+
+ http://www.free-codecs.com/download/lame_encoder.htm
+
+=item FLAC encoder
+
+I<Optional>
+
+This binary can be used to convert flac files to wav files, which 
+can be then used as a source by the lame encoder to create the MP3 files.
+
+The source code and the pre-compiled binaries for all platforms
+can be downloaded here:
+
+ http://flac.sourceforge.net/download.html
+
+=item Sound eXchange audio editor
+
+I<Optional>
+
+This command-line audio editor can be used in the conversion process
+to apply fade-in and fade-out for each track.
+
+The source code and the pre-compiled binaries for all platforms
+can be downloaded here:
+
+ http://sox.sourceforge.net/
+
+=back
 
 =head1 Usage
 
 You can call this script as described below. 
 If there are spaces in the folder name, you need to quote the path.
 
-This will use "lame --preset cbr 160" on all the files in the path:
-
- convert.pl "c:/Media files/myFolder" preset="cbr 160"
+ convert.pl /my/source/folder /target/folder preset=... tags=... fade=...
 
 If you are not providing an encoding type, the script will 
-use by default "lame --preset fast standard" on all the files in the path:
-
- convert.pl myFolder
-
-You can also provide a target folder
-
- convert.pl "c:/Media files/myFolder" "c:/Target folder" preset="cbr 160"
-
+use by default "lame --preset fast standard" on all the files in the path.
 
 =head2 Parameters
 
 =over
-
 
 =item preset
 
@@ -120,6 +155,26 @@ If the source file is an mp3 file, the file will be first converted to wav,
 then the fade will be applied, then the file will be converted back to mp3.
 
 =back
+
+B<Examples>
+
+This will use "lame --preset cbr 160" on all the files in the path:
+
+ convert.pl "c:/Media files/myFolder" preset="cbr 160"
+
+You can also provide a target folder
+
+ convert.pl "c:/Media files/myFolder" "c:/Target folder" preset="cbr 160"
+
+If you need to fade-in/fade-out every track, you can also provide
+the parameters that will be used by SOX:
+
+ convert.pl "c:/Media files/myFolder" preset=insane fade=in:0.1,out:0.5,trim:0.2
+
+The above command will encode in-place the source files, applying to each file
+a fade-in of 0.1s, a fade-out of 0.5s and trimming the last 0.2s away 
+from the end of the file.
+
 
 =cut
 sub new {

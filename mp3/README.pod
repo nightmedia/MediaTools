@@ -1,0 +1,73 @@
+=pod
+
+=head1 Description
+
+This is a collection of scripts used to manipulate audio files.
+
+=head1 Scripts
+
+=head2 C<convert.pl>
+
+This script is used to batch-convert folders with audio files
+to MP3 files.
+
+It uses the B<lame MP3 encoder> to create the mp3 files from sources,
+and optionally can use the B<FLAC encoder> to decode C<.flac> files
+before converting, as well as the B<Sound eXchange audio editor> 
+to apply fade-in/fade-out and trim the files.
+
+
+=head1 Related binaries
+
+The scripts rely on a few external binaries, listed below.
+
+=over
+
+=item Lame MP3
+
+This is the MP3 encoder, a command-line application. 
+The latest version can be compiled from source, which can be retrieved here:
+
+ http://lame.sourceforge.net/download.php
+
+For Windows users, the pre-compiled binary can be downloaded from here:
+
+ http://www.free-codecs.com/download/lame_encoder.htm
+
+=item FLAC encoder
+
+I<Optional>
+
+This binary can be used to convert flac files to wav files, which 
+can be then used as a source by the lame encoder to create the MP3 files.
+
+The source code and the pre-compiled binaries for all platforms
+can be downloaded here:
+
+ http://flac.sourceforge.net/download.html
+
+=item Sound eXchange audio editor
+
+I<Optional>
+
+This command-line audio editor can be used in the conversion process
+to apply fade-in and fade-out for each track.
+
+The source code and the pre-compiled binaries for all platforms
+can be downloaded here:
+
+ http://sox.sourceforge.net/
+
+=back
+
+B<Usage>
+
+You can call this script as described below. 
+If there are spaces in the folder name, you need to quote the path.
+
+ convert.pl /my/source/folder /target/folder preset=... tags=... fade=...
+
+If you are not providing an encoding type, the script will 
+use by default "lame --preset fast standard" on all the files in the path.
+
+=cut
