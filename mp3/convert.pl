@@ -13,7 +13,6 @@ package ConvertFilesToMP3;
 use strict;
 use Cwd;
 use Config;
-#use MP3::Info; # We pass the tags to lame inline
 use File::Copy;
 
 =pod
@@ -453,6 +452,12 @@ sub getTagsFromID3 {
     push @$messages, '=I= Source not an MP3 file, cannot read ID3 tags';
     return {};
   }
+  eval 'use MP3::Info;';
+  if ($@) {
+    push @$messages, '=I= Could not load MP3::Info: '.$@;
+    return {};
+  }
+  # This method is exported by MP3::Info
   my $tagFromID3 = get_mp3tag($sourceFile) || {};
   if (! keys %$tagFromID3) {
     push @$messages, '=I= MP3 file with no ID3 tags';
