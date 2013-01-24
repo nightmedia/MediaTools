@@ -216,7 +216,7 @@ sub run {
     unshift @otherParams, $targetPath;
     $targetPath = $sourcePath;
   }
-  my $inParams   = join ' ', @otherParams;
+  my $inParams  = join ' ', @otherParams;
   
   my (@messages, @errors);
   my $opParams  = $self->{opParams} = {};
