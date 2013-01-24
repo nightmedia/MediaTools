@@ -1,8 +1,9 @@
 #!perl -w
 use strict;
 my $config = {
-  lameBinaryPath  => 'c:/windows/lame.exe',
+  soxBinaryPath   => 'c:/apps/sox/sox.exe',
   flacBinaryPath  => 'c:/apps/flac/flac.exe',
+  lameBinaryPath  => 'c:/windows/lame.exe',
   defaultEncoding => 'insane',
   isDebug         => 1,
 };
@@ -48,6 +49,7 @@ You can also provide a target folder
 
 =over
 
+
 =item preset
 
 This parameter takes the string to be used with the lame --preset option.
@@ -73,13 +75,16 @@ Bitrate overview (mostly based on LAME 3.98.2 results)
  -V 8                            85             70...105
  -V 9                            65             45...85
 
-=item tags
 
-  tags=id3,path,name
+=item tags
 
 The "tags" parameter specifies how the ID3 tags should be built.
 The script will try to use the methods in order. If the ID3 was specified 
 and no ID3 was defined, the other methods will be used to define the tags. 
+
+  tags=id3,path,name
+
+The following tags can be used:
 
  id3    Use the ID3 tags if defined.
  
@@ -98,6 +103,21 @@ If a track contains the track number in the beginning, it will be used
 to set the track number field.
 
  01 - Artist - Album Name - Track Name.mp3
+
+
+=item fade
+
+When specified, this will rely on sox (http://sox.sourceforge.net/) to apply
+fade-in and fade-out. You can specify these params as:
+
+ fade=in:0.5,out:2.5
+
+This will fade in for half a second, and fade out for 2.5 seconds.
+
+The fade can be applied only to wav files.
+
+If the source file is an mp3 file, the file will be first converted to wav,
+then the fade will be applied, then the file will be converted back to mp3.
 
 =back
 
@@ -177,17 +197,30 @@ sub run {
     push @messages, "The tags will be built from: ".(join ', then ', @buildTags);
   }
   
+  if ($inParams =~ /fade=(\S+)/) {
+    # fade=in:0.5,out:2.5
+    my %fade;
+    my @fadeParams = split /,/, $1;
+    map {$fade{lc $1} = $2 if $_ =~ /(in|out)=(\d+|\d*\.\d+)/i} @fadeParams;
+    $self->{fadeParams} = \%fade if %fade;
+  }
+  
   push @messages, 'The new files will be created in: '.$targetPath
     if $sourcePath ne $targetPath;
   
   my $lameParams = join ' ', @outParams;
+  my $fadeMessage = $fadeParams
+    ? "Fade params were specified, and can only applied to wav files.
+If the source files are mp3, the fade params will be ignored."
+    : '';
   print ''.("=" x 60)."\n"
     .(join "\n\n", @messages)
     .qq~\n\nThe files in the following path:\n\n\t$sourcePath\n
-will be converted using the following call:
+will be converted using the following lame params:
 
 \t$lameBinaryPath $lameParams
 
+$fadeMessage
 You have 5 seconds to stop this...\n~;
   sleep 5;
   
@@ -258,6 +291,7 @@ sub workDir {
   my $flacBinaryPath  = $self->{flacBinaryPath};
   my $maxNestingLevel = $self->{maxNestingLevel};
   my $minFileSize     = $self->{minFileSize};
+  my $fadeParams      = $self->{fadeParams};
   
   return if $maxNestingLevel < $level;
   if (! -e $targetPath) {
@@ -350,9 +384,29 @@ sub workDir {
       
       print "CONVERT: $fileName\n";
       
+      my $tempTargetFile;
+      if ($fadeParams) {
+        my $trim    = $fadeParams->{trim} || '';
+        my $fadeIn  = $fadeParams->{in}   || 0;
+        my $fadeOut = $fadeParams->{out}  || 0;
+        if ($trim || $fadeIn || $fadeOut) {
+          $tempTargetFile = "$targetPath/$fRoot.fade.wav";
+          my $thisFadeParams;
+          $thisFadeParams   .= "$fadeIn 0 $fadeOut"
+            if $fadeIn || $fadeOut;
+          $thisFadeParams   .= " trim =0 -$trim" if $trim;
+          
+          print "FADE: $thisFadeParams\n";
+          
+          `$soxBinaryPath "$sourceFile" "$tempTargetFile" $thisFadeParams`;
+          
+          $sourceFile = $tempTargetFile;
+        }
+      }
       my $message = $self->encodeFile($sourceFile, $targetFile, $lameParams, $buildTags);
       
-      unlink $targetFileWav if $targetFileWav;
+      unlink $targetFileWav  if $targetFileWav;
+      unlink $tempTargetFile if $tempTargetFile;
       
       if ($message) {
         push @messages, $fileName;
