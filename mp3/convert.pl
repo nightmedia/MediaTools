@@ -12,7 +12,7 @@ package ConvertFilesToMP3;
 use strict;
 use Cwd;
 use Config;
-use MP3::Info;
+#use MP3::Info; # We pass the tags to lame inline
 use File::Copy;
 
 =pod
@@ -39,6 +39,10 @@ use by default "lame --preset fast standard" on all the files in the path:
 
  convert.pl myFolder
 
+You can also provide a target folder
+
+ convert.pl "c:/Media files/myFolder" "c:/Target folder" preset="cbr 160"
+
 
 =head2 Parameters
 
@@ -48,6 +52,11 @@ use by default "lame --preset fast standard" on all the files in the path:
 
 This parameter takes the string to be used with the lame --preset option.
 See the lame documentation for more information.
+
+Examples of using acceptable values:
+
+ preset=insane
+ preset="fast extreme"
 
 Bitrate overview (mostly based on LAME 3.98.2 results)  
 
@@ -109,16 +118,8 @@ sub new {
     '--quiet',
     '--add-id3v2',
   ];
-  $self->{isWin32}  = $os =~ /win/ ? 1 ; 0;
+  $self->{isWin32}  = $os =~ /win/ ? 1 : 0;
   return bless $self, $package;
-}
-
-sub log {
-  my $self     = shift;
-  my $message  = shift;
-  my $messages = $self->{messages} ||= [];
-  push @$messages, $message;
-  return;
 }
 
 sub run {
@@ -185,7 +186,7 @@ sub run {
     .qq~\n\nThe files in the following path:\n\n\t$sourcePath\n
 will be converted using the following call:
 
-\t$lameBinaryPath $Params
+\t$lameBinaryPath $lameParams
 
 You have 5 seconds to stop this...\n~;
   sleep 5;
@@ -253,6 +254,11 @@ sub workDir {
   my $currentPath = shift;
   my $targetPath  = shift;
   my $level       = shift || 1;
+  
+  my $flacBinaryPath  = $self->{flacBinaryPath};
+  my $maxNestingLevel = $self->{maxNestingLevel};
+  my $minFileSize     = $self->{minFileSize};
+  
   return if $maxNestingLevel < $level;
   if (! -e $targetPath) {
     mkdir($targetPath, 0777)
@@ -260,12 +266,12 @@ sub workDir {
   }
   my $isProcessInPlace = $currentPath eq $targetPath ? 1 : 0;
   
-  my (@errors, @messages);
+  my ($dh, @errors, @messages);
   my $opParams   = $self->{opParams};
   my $buildTags  = $opParams->{-BUILD_TAGS};
   my $lameParams = $opParams->{-LAME_PARAMS};
   
-  if (! opendir (my $dh, $currentPath)) {
+  if (! opendir ($dh, $currentPath)) {
     $self->addError($currentPath);
     $self->addError("Can't open $currentPath:. ".$!);
     return;
@@ -326,7 +332,7 @@ sub workDir {
       my $targetFileWav;
       if ($fileName =~ /\.flac$/oi) {
         print "CONVERT: $fileName to wav\n";
-        $fileName   = "$fRoot.wav";
+        $fileName      = "$fRoot.wav";
         $targetFileWav = "$currentPath/$fileName";
         unlink $targetFileWav
           if $isProcessInPlace && -e $targetFileWav;
@@ -344,7 +350,7 @@ sub workDir {
       
       print "CONVERT: $fileName\n";
       
-      $message = $self->encodeFile($sourceFile, $targetFile, $lameParams, $buildTags);
+      my $message = $self->encodeFile($sourceFile, $targetFile, $lameParams, $buildTags);
       
       unlink $targetFileWav if $targetFileWav;
       
@@ -489,6 +495,7 @@ sub encodeFile {
   my $targetFile = shift;
   my $lameParams = shift;
   my $buildTags  = shift;
+  my @messages;
   my $lameBinaryPath = $self->{lameBinaryPath};
   # These are the params as defined by the MP3::Info
   my @mp3Params  = qw(TITLE YEAR ARTIST ALBUM GENRE TRACKNUM COMMENT);
@@ -552,7 +559,6 @@ sub encodeFile {
   $lameParams .= qq~ --tn "$tag{'TRACKNUM'}"~ if $tag{'TRACKNUM'} ne '';
   $lameParams .= qq~ --tc "$tag{'COMMENT'}"~  if $tag{'COMMENT'}  ne '';
   
-  
   if ($self->{isWin32}) {
     $sourceFile =~ s/\//\\/g;
     $targetFile =~ s/\//\\/g;
@@ -562,15 +568,17 @@ sub encodeFile {
   push @messages, "=== RUN: $cmd";
   `$cmd`;
   my $targetSize = -e $targetFile ? -s $targetFile : 0;
-  
-  push @messages, $sourceSize && $targetSize ? 
-    ? "Size changed from "
+  if ($sourceSize && $targetSize) {
+    push @messages, "Size changed from "
       .(sprintf '%.2d', $sourceSize / 1000)."K to "
-      .(sprintf '%.2d', $targetSize / 1000)."K."
-    : 'ERROR:Could not convert';
+      .(sprintf '%.2d', $targetSize / 1000)."K.";
+  }
+  else {
+    push @messages, 'ERROR:Could not convert';
+  }
   push @messages, ("=" x 40);
   
-  @messages = () if ! $isDebug;
+  @messages = () if ! $self->{isDebug};
   
   return \@messages;
 }
