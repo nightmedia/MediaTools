@@ -28,7 +28,7 @@ The scripts rely on a few external binaries, listed below.
 This is the MP3 encoder, a command-line application. 
 The latest version can be compiled from source, which can be retrieved here:
 
- L<http://lame.sourceforge.net/download.php>
+L<http://lame.sourceforge.net/download.php>
 
 For Windows users, the pre-compiled binary can be downloaded from here:
 
