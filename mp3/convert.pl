@@ -177,15 +177,17 @@ sub run {
       || $self->end("Could not create path($targetPath):".$!);
   }
   
-  if ($inParams =~ /preset=([^\-]+)/) {
-    push @outParams, '--preset '.$1;
+  if ($inParams =~ /preset=(".+?"|\S+)/) {
+    my $preset = $1;
+    $preset    = $1 if $preset =~ /^"(.+)"$/;
+    push @outParams, '--preset '.$preset;
   }
   else {
     push @messages, qq~You did not provide an encoding standard, using "$defaultEncoding".~;
     push @outParams, '--preset '.$defaultEncoding;
   }
   
-  if ($inParams =~ /tags=([^\-]+)/) {
+  if ($inParams =~ /tags=(\S+)/) {
     @buildTags = split ',', lc $1;
     foreach(@buildTags) {
       $_ =~ s/^\s+//;
