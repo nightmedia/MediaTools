@@ -28,11 +28,11 @@ The scripts rely on a few external binaries, listed below.
 This is the MP3 encoder, a command-line application. 
 The latest version can be compiled from source, which can be retrieved here:
 
- http://lame.sourceforge.net/download.php
+ L<http://lame.sourceforge.net/download.php>
 
 For Windows users, the pre-compiled binary can be downloaded from here:
 
- http://www.free-codecs.com/download/lame_encoder.htm
+L<http://www.free-codecs.com/download/lame_encoder.htm>
 
 =item FLAC encoder
 
@@ -44,7 +44,7 @@ can be then used as a source by the lame encoder to create the MP3 files.
 The source code and the pre-compiled binaries for all platforms
 can be downloaded here:
 
- http://flac.sourceforge.net/download.html
+L<http://flac.sourceforge.net/download.html>
 
 =item Sound eXchange audio editor
 
@@ -56,7 +56,7 @@ to apply fade-in and fade-out for each track.
 The source code and the pre-compiled binaries for all platforms
 can be downloaded here:
 
- http://sox.sourceforge.net/
+L<http://sox.sourceforge.net/>
 
 =back
 
