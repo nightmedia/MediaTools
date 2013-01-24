@@ -225,16 +225,12 @@ sub run {
     unshift @otherParams, $targetPath;
     $targetPath = $sourcePath;
   }
-<<<<<<< HEAD
-  my $inParams  = join ' ', @otherParams;
-=======
   my $inParams = join ' ', @otherParams;
   my %params;
   # If the params have spaces, they are in quotes
   $inParams =~ s{(\w+)=(?:"(.+?)"|(\S*))} {
     $params{lc $1}=defined $2 ? $2 : defined $3 ? $3 : '';
   }ge;
->>>>>>> Changes to documentation and code
   
   my (@messages, @errors);
   my $opParams   = $self->{opParams} = {};
@@ -321,7 +317,7 @@ sub makeAbsolutePath {
   elsif ($path !~ /^(\w\:|\/)/) {
     $path = getcwd().'/'.$path;
   }
-  $path =~ s/\\/\//g if $path =~ /\\/;
+  $path =~ s/\\/\//g;
   return $path;
 }
 
