@@ -685,8 +685,6 @@ sub getTagsFromFile {
     my %tags;
     my $mac = Audio::APE->new($sourceFile);
     my $info = $mac->tags();
-    print Dumper(\%$info);
-
     $tags{TITLE}    = $info->{TITLE}    || $info->{title}    || '';
     $tags{YEAR}     = $info->{YEAR}     || $info->{year}     || '';
     $tags{ARTIST}   = $info->{ARTIST}   || $info->{artist}   || '';
