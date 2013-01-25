@@ -12,7 +12,8 @@ This script is used to batch-convert folders with audio files
 to MP3 files.
 
 It uses the B<lame MP3 encoder> to create the mp3 files from sources,
-and optionally can use the B<FLAC encoder> to decode C<.flac> files
+and optionally can use third party encoders like the B<FLAC>
+or B<MonkeyAudio> to decode C<.flac> and C<.ape> files
 before converting, as well as the B<Sound eXchange audio editor> 
 to apply fade-in/fade-out and trim the files.
 

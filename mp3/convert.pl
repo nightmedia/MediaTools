@@ -83,7 +83,7 @@ See L<http://wiki.hydrogenaudio.org/index.php?title=LAME> for more info.
 
 It can have one or all of the following values:
 
- process=flac,wav,mp3
+ process=ape,flac,wav,mp3
 
 If not provided, all supported media files will be processed. 
 
