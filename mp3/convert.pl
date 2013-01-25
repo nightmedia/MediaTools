@@ -5,7 +5,7 @@ my $config = {
   flacBinaryPath    => 'c:/apps/flac/flac.exe',
   lameBinaryPath    => 'c:/windows/lame.exe',
   defaultEncoding   => 'insane',
-  defaultTagSource  => 'id3',
+  defaultTagSource  => 'file',
   minOutputFileSize => 1000, # Files under a certain size could be the result of an encoding error
   isDebug           => 1,
 };
@@ -138,11 +138,11 @@ The "tags" parameter specifies how the ID3 tags should be built.
 The script will try to use the methods in order. If the ID3 was specified 
 and no ID3 was defined, the other methods will be used to define the tags. 
 
-  tags=id3,path,name
+  tags=file,path,name
 
 The following tags can be used:
 
- id3    Use the ID3 tags if defined.
+ file   Use the ID3 or FLAC tags if defined.
  
  path   Use the last two folders in the path to define the artist and the album name.
         The script will fail if the path is not deep enough to define both.
@@ -215,7 +215,7 @@ sub new {
   $self->{maxNestingLevel}   ||= 10;
   # Output files smaller than 10K might be the result of an encoding error.
   $self->{minOutputFileSize} ||= 10_000;
-  $self->{defaultTagSource}  ||= 'id3';
+  $self->{defaultTagSource}  ||= 'file';
   $self->{defaultLameParams} ||= [
     '--quiet',
     '--add-id3v2',
@@ -255,7 +255,7 @@ sub run {
   my $opParams        = $self->{opParams} = {};
   my @outParams       = @$defaultLameParams;
   my @processFileType = qw(flac wav mp3 );
-  my @canTagSource    = qw(id3 name path );
+  my @canTagSource    = qw(file name path );
   
   $sourcePath = $self->makeAbsolutePath($sourcePath);
   $targetPath = $self->makeAbsolutePath($targetPath);
@@ -463,6 +463,7 @@ sub workDir {
     next if $fileName !~ /(.+)\.(\w+)$/;
     my $fRoot = $1;
     my $fExt  = lc $2;
+    my $fileTags;
     if (! $processFileType->{$fExt}) {
       $self->toLog("SKIP: $fileName");
       next;
@@ -507,6 +508,8 @@ sub workDir {
       my $targetFileWav;
       if ($fExt eq 'flac') {
         $self->toLog("CONVERT: $fileName to wav");
+        $fileTags = $self->getTagsFromFile($sourceFile, \@messages) || {};
+
         my $newFileName = "$fRoot.wav";
         $targetFileWav = "$currentPath/$newFileName";
         unlink $targetFileWav
@@ -558,7 +561,7 @@ sub workDir {
         unlink $targetFile
           if $isProcessInPlace && -e $targetFile;
         
-        $message = $self->encodeFile($sourceFile, $targetFile, $lameParams, $tagsSource);
+        $message = $self->encodeFile($sourceFile, $targetFile, $lameParams, $tagsSource, $fileTags);
       }
       
       unlink $targetFileWav  if $targetFileWav;
@@ -576,11 +579,11 @@ sub workDir {
   }
   if (@errors) {
     $self->addError($currentPath);
-    map { $self->addError("  $_") } @errors;
+    map { $self->addError($_) } @errors;
   }
   if (@messages) {
     $self->addMessage($currentPath);
-    map { $self->addMessage("  $_") } @messages;
+    map { $self->addMessage($_) } @messages;
   }
   return;
 }
@@ -592,11 +595,33 @@ sub end {
   exit 1;
 }
 
-sub getTagsFromID3 {
+sub getTagsFromFile {
   my $self       = shift;
   my $sourceFile = shift;
   my $messages   = shift;
-  if ($sourceFile !~ /\.mp3$/oi) {
+  if ($sourceFile =~ /\.flac$/i) {
+    eval 'use Audio::FLAC::Header;';
+    if ($@) {
+      push @$messages, '=I= Could not load Audio::FLAC::Header: '.$@;
+      return {};
+    }
+    my %tags;
+    my $flac = Audio::FLAC::Header->new($sourceFile);
+    my $info = $flac->tags();
+    $tags{TITLE}    = $info->{TITLE}       || $info->{title}       || '';
+    $tags{YEAR}     = $info->{DATE}        || $info->{date}        || '';
+    $tags{ARTIST}   = $info->{ARTIST}      || $info->{artist}      || '';
+    $tags{ALBUM}    = $info->{ALBUM}       || $info->{album}       || '';
+    $tags{GENRE}    = $info->{GENRE}       || $info->{genre}       || '';
+    $tags{TRACKNUM} = $info->{TRACKNUMBER} || $info->{tracknumber} || '';
+    $tags{COMMENT}  = $info->{COMMENT}     || $info->{comment}     || '';
+    # http://perldoc.perl.org/utf8.html
+    foreach my $key(keys %tags) {
+      utf8::decode($tags{$key});
+    }
+    return \%tags;
+  }
+  if ($sourceFile !~ /\.mp3$/i) {
     push @$messages, '=I= Source not an MP3 file, cannot read ID3 tags';
     return {};
   }
@@ -606,14 +631,14 @@ sub getTagsFromID3 {
     return {};
   }
   # This method is exported by MP3::Info
-  my $tagFromID3 = get_mp3tag($sourceFile) || {};
-  if (! keys %$tagFromID3) {
+  my $tagFromFile = get_mp3tag($sourceFile) || {};
+  if (! keys %$tagFromFile) {
     push @$messages, '=I= MP3 file with no ID3 tags';
   }
   else {
     push @$messages, '=I= MP3 file has ID3 tags';
   }
-  return $tagFromID3;
+  return $tagFromFile;
 }
 
 sub getTagsFromPath {
@@ -708,6 +733,7 @@ sub encodeFile {
   my $targetFile     = shift;
   my $lameParams     = shift;
   my $tagsSource     = shift;
+  my $fileTags       = shift || {};
   my $lameBinaryPath = $self->{lameBinaryPath};
   
   my (%tag, @messages);
@@ -716,9 +742,12 @@ sub encodeFile {
   my %defaultTag = map { $_ => '' } @mp3Params;
   my %tagsSource = map { $_ => 1 } @$tagsSource;
   
-  my $tagFromID3  = $tagsSource{id3}
-    ? $self->getTagsFromID3($sourceFile, \@messages)  || {}
-    : {};
+  my $tagFromFile = %$fileTags
+    ? $fileTags
+    : $tagsSource{id3}
+      ? $self->getTagsFromFile($sourceFile, \@messages)  || {}
+      : {};
+  
   my $tagFromPath = $tagsSource{path}
     ? $self->getTagsFromPath($sourceFile, \@messages) || {}
     : {};
@@ -734,8 +763,8 @@ sub encodeFile {
       if ($tagSource eq 'path') {
         $tag{$x} = $tagFromPath->{$x} if exists $tagFromPath->{$x} && defined $tagFromPath->{$x};
       }
-      elsif ($tagSource eq 'id3') {
-        $tag{$x} = $tagFromID3->{$x} if exists $tagFromID3->{$x} && defined $tagFromID3->{$x};
+      elsif ($tagSource eq 'file') {
+        $tag{$x} = $tagFromFile->{$x} if exists $tagFromFile->{$x} && defined $tagFromFile->{$x};
       }
       elsif ($tagSource eq 'name') {
         $tag{$x} = $tagFromName->{$x} if exists $tagFromName->{$x} && defined $tagFromName->{$x};
@@ -779,7 +808,9 @@ sub encodeFile {
   }
   else {
     my $cmd = qq~$lameBinaryPath $lameParams "$sourceFile" "$targetFile"~;
-    # See http://search.cpan.org/~jhi/perl-5.8.1/pod/perlunicode.pod
+    # See:
+    # http://search.cpan.org/~jhi/perl-5.8.1/pod/perlunicode.pod
+    # http://perldoc.perl.org/utf8.html
     utf8::downgrade($cmd);
     push @messages, $cmd;
     `$cmd`;
