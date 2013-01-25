@@ -1,9 +1,10 @@
 #!perl -w
 use strict;
 my $config = {
-  soxBinaryPath     => 'c:/apps/sox/sox.exe',
-  flacBinaryPath    => 'c:/apps/flac/flac.exe',
   lameBinaryPath    => 'c:/windows/lame.exe',
+  apeBinaryPath     => 'c:/apps/mac/mac.exe',
+  flacBinaryPath    => 'c:/apps/flac/flac.exe',
+  soxBinaryPath     => 'c:/apps/sox/sox.exe',
   defaultEncoding   => 'insane',
   defaultTagSource  => 'file',
   minOutputFileSize => 1000, # Files under a certain size could be the result of an encoding error
@@ -48,6 +49,16 @@ L<http://lame.sourceforge.net/download.php>
 For Windows users, the pre-compiled binary can be downloaded from here:
 
 L<http://www.free-codecs.com/download/lame_encoder.htm>
+
+=item MonkeyAudio encoder
+
+This command-line binary can be used to convert ape files to wav files, 
+which can be then used as a source by the lame encoder to create 
+the MP3 files.
+
+The source code and the pre-compiled window application can be downloaded here:
+
+L<http://www.monkeysaudio.com/download.html>
 
 =item FLAC encoder
 
@@ -208,6 +219,7 @@ sub new {
   my $os = $^O || $Config::Config{'osname'};
   $self->{isDebug}           ||= 0;
   $self->{lameBinaryPath}    ||= 'lame';
+  $self->{apeBinaryPath}     ||= '';
   $self->{flacBinaryPath}    ||= 'flac';
   $self->{soxBinaryPath}     ||= 'sox',
   $self->{defaultEncoding}   ||= 'insane';
@@ -232,7 +244,6 @@ sub run {
   $|++;
   my $defaultEncoding   = $self->{defaultEncoding};
   my $lameBinaryPath    = $self->{lameBinaryPath};
-  my $flacBinaryPath    = $self->{flacBinaryPath};
   my $minOutputFileSize = $self->{minOutputFileSize};
   my $maxNestingLevel   = $self->{maxNestingLevel};
   my $defaultLameParams = $self->{defaultLameParams};
@@ -254,7 +265,7 @@ sub run {
   my (@messages, @tagsSource, @errors);
   my $opParams        = $self->{opParams} = {};
   my @outParams       = @$defaultLameParams;
-  my @processFileType = qw(flac wav mp3 );
+  my @processFileType = qw(ape flac wav mp3 );
   my @canTagSource    = qw(file name path );
   
   $sourcePath = $self->makeAbsolutePath($sourcePath);
@@ -415,6 +426,7 @@ sub workDir {
   my $targetPath  = shift;
   my $level       = shift || 1;
   
+  my $apeBinaryPath     = $self->{apeBinaryPath};
   my $flacBinaryPath    = $self->{flacBinaryPath};
   my $soxBinaryPath     = $self->{soxBinaryPath};
   my $maxNestingLevel   = $self->{maxNestingLevel};
@@ -506,7 +518,32 @@ sub workDir {
     }
     else {
       my $targetFileWav;
-      if ($fExt eq 'flac') {
+      if ($fExt eq 'ape') {
+        if (! $apeBinaryPath) {
+          $self->toLog("SKIP(No converter): $fileName");
+          next;
+        }
+        $self->toLog("CONVERT: $fileName to wav");
+        $fileTags = $self->getTagsFromFile($sourceFile, \@messages) || {};
+
+        my $newFileName = "$fRoot.wav";
+        $targetFileWav = "$currentPath/$newFileName";
+        unlink $targetFileWav
+          if $isProcessInPlace && -e $targetFileWav;
+        
+        my $cmd = qq~$apeBinaryPath "$sourceFile" "$targetFileWav" -d~;
+        utf8::downgrade($cmd);
+        push @messages, $cmd;
+        `$cmd`;
+        
+        my $oldFile = $sourceFile;
+        $sourceFile = $targetFileWav;
+        unlink $oldFile
+          if $isProcessInPlace && -e $sourceFile && $self->{deleteSourceFiles};
+        $self->toLog("FAILED TO CONVERT: $fileName to $newFileName")
+          if ! -e $sourceFile;
+      }
+      elsif ($fExt eq 'flac') {
         $self->toLog("CONVERT: $fileName to wav");
         $fileTags = $self->getTagsFromFile($sourceFile, \@messages) || {};
 
@@ -619,6 +656,30 @@ sub getTagsFromFile {
     foreach my $key(keys %tags) {
       utf8::decode($tags{$key});
     }
+    return \%tags;
+  }
+  if ($sourceFile =~ /\.ape$/i) {
+    eval 'use Audio::APE;';
+    if ($@) {
+      push @$messages, '=I= Could not load Audio::APE: '.$@;
+      return {};
+    }
+    my %tags;
+    my $mac = Audio::APE->new($sourceFile);
+    my $info = $mac->tags();
+    print Dumper(\%$info);
+
+    $tags{TITLE}    = $info->{TITLE}    || $info->{title}    || '';
+    $tags{YEAR}     = $info->{YEAR}     || $info->{year}     || '';
+    $tags{ARTIST}   = $info->{ARTIST}   || $info->{artist}   || '';
+    $tags{ALBUM}    = $info->{ALBUM}    || $info->{album}    || '';
+    $tags{GENRE}    = $info->{GENRE}    || $info->{genre}    || '';
+    $tags{TRACKNUM} = $info->{TRACKNUM} || $info->{track}    || '';
+    $tags{COMMENT}  = $info->{COMMENT}  || $info->{comment}  || '';
+    # Did not find a source file with valid unicode tags to test if this is necessary
+#    foreach my $key(keys %tags) {
+#      utf8::decode($tags{$key});
+#    }
     return \%tags;
   }
   if ($sourceFile !~ /\.mp3$/i) {

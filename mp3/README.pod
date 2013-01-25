@@ -34,6 +34,16 @@ For Windows users, the pre-compiled binary can be downloaded from here:
 
 L<http://www.free-codecs.com/download/lame_encoder.htm>
 
+=item MonkeyAudio encoder
+
+This command-line binary can be used to convert ape files to wav files, 
+which can be then used as a source by the lame encoder to create 
+the MP3 files.
+
+The source code and the pre-compiled window application can be downloaded here:
+
+L<http://www.monkeysaudio.com/download.html>
+
 =item FLAC encoder
 
 I<Optional>
