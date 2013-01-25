@@ -34,6 +34,9 @@ For Windows users, the pre-compiled binary can be downloaded from here:
 
 L<http://www.free-codecs.com/download/lame_encoder.htm>
 
+In order to be able to read tags from the C<.mp3> files, you need
+the C<MP3::Info> package installed from CPAN.
+
 =item MonkeyAudio encoder
 
 I<Optional>
@@ -46,6 +49,13 @@ The source code and the pre-compiled window application can be downloaded here:
 
 L<http://www.monkeysaudio.com/download.html>
 
+In order to be able to read tags from the C<.ape> files, you need
+the L<http://search.cpan.org/~daniel/Audio-Musepack-0.7/lib/Audio/APE.pm Audio::APE>
+package installed from CPAN. This is a pure Perl package that can be unpacked
+by hand in the windows Activestate version, even if it does not show in the
+active repository.
+
+
 =item FLAC encoder
 
 I<Optional>
@@ -57,6 +67,11 @@ The source code and the pre-compiled binaries for all platforms
 can be downloaded here:
 
 L<http://flac.sourceforge.net/download.html>
+
+In order to be able to read tags from the C<.flac> files, you need
+the L<http://search.cpan.org/~daniel/Audio-FLAC-Header-2.4/Header.pm Audio::FLAC::Header>
+package installed from CPAN.
+
 
 =item Sound eXchange audio editor
 
