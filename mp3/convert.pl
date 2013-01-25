@@ -1,11 +1,13 @@
 #!perl -w
 use strict;
 my $config = {
-  soxBinaryPath   => 'c:/apps/sox/sox.exe',
-  flacBinaryPath  => 'c:/apps/flac/flac.exe',
-  lameBinaryPath  => 'c:/windows/lame.exe',
-  defaultEncoding => 'insane',
-  isDebug         => 1,
+  soxBinaryPath     => 'c:/apps/sox/sox.exe',
+  flacBinaryPath    => 'c:/apps/flac/flac.exe',
+  lameBinaryPath    => 'c:/windows/lame.exe',
+  defaultEncoding   => 'insane',
+  defaultTagSource  => 'id3',
+  minOutputFileSize => 1000, # Files under a certain size could be the result of an encoding error
+  isDebug           => 1,
 };
 
 ConvertFilesToMP3->new($config)->run(@ARGV);
@@ -16,6 +18,7 @@ use warnings;
 use Cwd;
 use Config;
 use File::Copy;
+use Data::Dumper;
 
 =pod
 
@@ -86,6 +89,8 @@ use by default "lame --preset fast standard" on all the files in the path.
 
 =head2 Parameters
 
+All parameters are optional.
+
 =over
 
 =item preset
@@ -114,6 +119,18 @@ Bitrate overview (mostly based on LAME 3.98.2 results)
  -V 9                            65             45...85
 
 See L<http://wiki.hydrogenaudio.org/index.php?title=LAME> for more info.
+
+=item process
+
+It can have one or all of the following values:
+
+ process=flac,wav,mp3
+
+If not provided, all supported media files will be processed. 
+
+If the process is in-place, the script will not process mp3 files, 
+to avoid re-processing files that could have been already converted. 
+You can override this behavior by providing C<mp3> in the source.
 
 =item tags
 
@@ -197,8 +214,9 @@ sub new {
   # How many folders deep to go look for files
   $self->{maxNestingLevel}   ||= 10;
   # Output files smaller than 10K might be the result of an encoding error.
-  $self->{minFileSize}       = 10000;
-  $self->{defaultLameParams} = [
+  $self->{minOutputFileSize} ||= 10_000;
+  $self->{defaultTagSource}  ||= 'id3';
+  $self->{defaultLameParams} ||= [
     '--quiet',
     '--add-id3v2',
   ];
@@ -215,9 +233,10 @@ sub run {
   my $defaultEncoding   = $self->{defaultEncoding};
   my $lameBinaryPath    = $self->{lameBinaryPath};
   my $flacBinaryPath    = $self->{flacBinaryPath};
-  my $minFileSize       = $self->{minFileSize};
+  my $minOutputFileSize = $self->{minOutputFileSize};
   my $maxNestingLevel   = $self->{maxNestingLevel};
   my $defaultLameParams = $self->{defaultLameParams};
+  my $defaultTagSource  = $self->{defaultTagSource};
   my $isDebug           = $self->{isDebug};
   
   if ($targetPath =~ /=/) {
@@ -225,17 +244,15 @@ sub run {
     unshift @otherParams, $targetPath;
     $targetPath = $sourcePath;
   }
-  my $inParams = join ' ', @otherParams;
-  my %params;
-  # If the params have spaces, they are in quotes
-  $inParams =~ s{(\w+)=(?:"(.+?)"|(\S*))} {
-    $params{lc $1}=defined $2 ? $2 : defined $3 ? $3 : '';
-  }ge;
+  my %params = map {
+    $_ =~ /(\w+)=(.+)/ ? (lc $1, $2) : ()
+  } @otherParams;
   
-  my (@messages, @errors);
-  my $opParams   = $self->{opParams} = {};
-  my @outParams  = @$defaultLameParams;
-  my @tagsSource = qw(id3 );
+  my (@messages, @tagsSource, @errors);
+  my $opParams        = $self->{opParams} = {};
+  my @outParams       = @$defaultLameParams;
+  my @processFileType = qw(flac wav mp3 );
+  my @canTagSource    = qw(id3 name path );
   
   $sourcePath = $self->makeAbsolutePath($sourcePath);
   $targetPath = $self->makeAbsolutePath($targetPath);
@@ -247,47 +264,73 @@ sub run {
     mkdir($targetPath, 0777)
       || $self->end("Could not create path($targetPath): ".$!);
   }
-  my $preset     = $params{preset} || '';
-  my $tagsSource = $params{tags}   || '';
-  my $fadeParams = $params{fade}   || '';
+  my $preset          = $params{preset}  || '';
+  my $tagsSource      = $params{tags}    || '';
+  my $fadeParams      = $params{fade}    || '';
+  my $processFileType = $params{process} || '';
   
   if ($preset) {
     push @outParams, '--preset '.$preset;
   }
   else {
-    push @messages, qq~You did not provide an encoding standard, using "$defaultEncoding".~;
+    push @messages, qq~No encoding standard was specified, using "$defaultEncoding"~;
     push @outParams, '--preset '.$defaultEncoding;
   }
   
-  if ($tagsSource) {
-    @tagsSource = split ',', lc $tagsSource;
-    foreach(@tagsSource) {
-      $_ =~ s/^\s+//;
-      $_ =~ s/\s+$//;
-      $self->end("Invalid tag param: ".$_)
-        if $_ !~ /^(id3|name|path)/;
-    }
-    push @messages, "The tags will be built from: ".(join ', then ', @tagsSource);
+  if ($processFileType) {
+    my %canProcessFileType = map {$_ => 1} @processFileType;
+    $processFileType =~ s/\s+//g;
+    @processFileType = 
+      grep { $canProcessFileType{$_} }
+      split /,/, lc $processFileType;
   }
+  else {
+    @processFileType = grep {$_ ne 'mp3'} @processFileType
+      if $sourcePath eq $targetPath;
+  }
+  $self->{processFileType} = { map {$_ => 1} @processFileType };
+  push @messages, "The following file types will be processed: "
+    .(join ',', @processFileType);
+  
+  my %canTagSource = map {$_ => 1} @canTagSource;
+  if ($tagsSource) {
+    $tagsSource =~ s/\s+//g;
+    @tagsSource = split /,/, lc $tagsSource;
+  }
+  else {
+    @tagsSource = ref $defaultTagSource
+      ? @$defaultTagSource
+      : ($defaultTagSource);
+  }
+  @tagsSource = grep { $canTagSource{$_} } @tagsSource;
+  push @messages, @tagsSource
+    ? "The tags will be built from: "
+      .(join ', then ', @tagsSource)
+    : "No ID3V2 tags will be set";
   
   if ($fadeParams) {
     # fade=in:0.5,out:2.5
-    my %fade;
-    my @fadeParams = map {$_=~ s/^\s+//; $_=~ s/\s+$//; $_} split /,/, $fadeParams;
-    map {$fade{lc $1} = $2 if $_ =~ /(in|out|trim):(\d+|\d*\.\d+)/i} @fadeParams;
-    $self->{fadeParams} = \%fade if %fade;
+    $fadeParams =~ s/\s+//g;
+    my @fadeParams = split /,/, $fadeParams;
+    my %fadeParams = map {
+      $_ =~ /(in|out|trim):(\d+|\d*\.\d+)/i
+        ? (lc $1, $2)
+        : ()
+    } @fadeParams;
+    $self->{fadeParams} = \%fadeParams if %fadeParams;
   }
   
-  push @messages, 'The new files will be created in: '.$targetPath
-    if $sourcePath ne $targetPath;
+  push @messages, $sourcePath eq $targetPath
+    ? 'The new files will be created in the same folder as the source'
+    : 'The new files will be created in: '.$targetPath;
   
   my $lameParams = join ' ', @outParams;
   my $fadeMessage = $self->{fadeParams}
     ? "Fade params were specified, and can only applied to wav files.
 If the source files are mp3, the fade params will be ignored.\n"
     : '';
-  print ''.("=" x 60)."\n"
-    .(join "\n\n", @messages)
+  print ''.("=" x 60)."\n- "
+    .(join "\n- ", @messages)
     .qq~\n\nThe files in the following path:\n\n\t$sourcePath\n
 will be converted using the following lame params:
 
@@ -318,6 +361,7 @@ sub makeAbsolutePath {
     $path = getcwd().'/'.$path;
   }
   $path =~ s/\\/\//g;
+  $path =~ s/\/$//;
   return $path;
 }
 
@@ -361,11 +405,12 @@ sub workDir {
   my $targetPath  = shift;
   my $level       = shift || 1;
   
-  my $flacBinaryPath  = $self->{flacBinaryPath};
-  my $soxBinaryPath   = $self->{soxBinaryPath};
-  my $maxNestingLevel = $self->{maxNestingLevel};
-  my $minFileSize     = $self->{minFileSize};
-  my $fadeParams      = $self->{fadeParams};
+  my $flacBinaryPath    = $self->{flacBinaryPath};
+  my $soxBinaryPath     = $self->{soxBinaryPath};
+  my $maxNestingLevel   = $self->{maxNestingLevel};
+  my $minOutputFileSize = $self->{minOutputFileSize};
+  my $fadeParams        = $self->{fadeParams};
+  my $processFileType   = $self->{processFileType};
   if ($fadeParams) {
     $self->end("No soxBinaryPath defined")
       if ! $soxBinaryPath;
@@ -406,7 +451,15 @@ sub workDir {
       $self->workDir($sourceFile, $newTargetPath, $level + 1); 
       next;
     };
-    if ($fileName =~ /(.+)\.mp3$/oi) {
+    next if $fileName !~ /(.+)\.(\w+)$/;
+    my $fRoot = $1;
+    my $fExt  = lc $2;
+    if (! $processFileType->{$fExt}) {
+      print "SKIP: $fileName\n";
+      next;
+    }
+    
+    if ($fExt eq 'mp3') {
       $targetFile = $isProcessInPlace
         ? "$currentPath/temp.mp3"
         : "$targetPath/$fileName";
@@ -425,10 +478,10 @@ sub workDir {
         push @errors, $fileName;
         push @errors, "Encode failed, mp3 target file could not be created";
       }
-      elsif (-s $targetFile < $minFileSize) {
+      elsif (-s $targetFile < $minOutputFileSize) {
         push @errors, $fileName;
         push @errors, "Encode failed, output smaller than "
-          .(sprintf "%.2d", $minFileSize / 1000)
+          .(sprintf "%.2d", $minOutputFileSize / 1000)
           ."KB, keeping original file.";
         unlink $targetFile;
         copy($sourceFile, $targetFile) if ! $isProcessInPlace;
@@ -441,10 +494,9 @@ sub workDir {
         }
       }
     }
-    elsif ($fileName =~ /(.+)\.(wav|flac)$/oi) {
-      my $fRoot = $1;
+    else {
       my $targetFileWav;
-      if ($fileName =~ /\.flac$/oi) {
+      if ($fExt eq 'flac') {
         print "CONVERT: $fileName to wav\n";
         my $newFileName = "$fRoot.wav";
         $targetFileWav = "$currentPath/$newFileName";
@@ -452,14 +504,14 @@ sub workDir {
           if $isProcessInPlace && -e $targetFileWav;
         
         my $cmd = qq~$flacBinaryPath -d "$sourceFile" -o "$targetFileWav"~;
-        push @messages, "=== RUN: $cmd";
-        my $out = `$cmd`;
+        push @messages, $cmd;
+        `$cmd`;
         
         my $oldFile = $sourceFile;
         $sourceFile = $targetFileWav;
         unlink $oldFile
           if $isProcessInPlace && -e $sourceFile && $self->{deleteSourceFiles};
-        print "FAILED TO CONVERT: $fileName to $newFileName\nERROR: \n===\n$out\n===\n"
+        print "FAILED TO CONVERT: $fileName to $newFileName\n"
           if ! -e $sourceFile;
       }
       
@@ -478,10 +530,15 @@ sub workDir {
           print "FADE: $thisFadeParams\n";
           
           my $cmd = qq~$soxBinaryPath "$sourceFile" "$tempTargetFile" $thisFadeParams~;
-          push @messages, "=== RUN: $cmd";
+          push @messages, $cmd;
           `$cmd`;
           
-          $sourceFile = $tempTargetFile;
+          if (! -e $tempTargetFile) {
+            print "FAILED TO FADE: $sourceFile to $tempTargetFile\n"
+          }
+          else {
+            $sourceFile = $tempTargetFile;
+          }
         }
       }
       my $message;
@@ -504,9 +561,6 @@ sub workDir {
         push @errors, $fileName;
         push @errors, "\tEncode failed, see log";
       }
-    }
-    else {
-      print "SKIP: $fileName\n";
     }
   }
   if (@errors) {
@@ -638,25 +692,17 @@ sub getTagsFromName {
 
 
 sub encodeFile {
-  my ($x, %tag, $tagSource);
-  my $self       = shift;
-  my $sourceFile = shift;
-  my $targetFile = shift;
-  my $lameParams = shift;
-  my $tagsSource = shift;
-  my @messages;
+  my $self           = shift;
+  my $sourceFile     = shift;
+  my $targetFile     = shift;
+  my $lameParams     = shift;
+  my $tagsSource     = shift;
   my $lameBinaryPath = $self->{lameBinaryPath};
+  
+  my (%tag, @messages);
   # These are the params as defined by the MP3::Info
   my @mp3Params  = qw(TITLE YEAR ARTIST ALBUM GENRE TRACKNUM COMMENT);
-  my %defaultTag = (
-    TITLE    => '',
-    YEAR     => '',
-    ARTIST   => '',
-    ALBUM    => '',
-    GENRE    => 'Rock',
-    TRACKNUM => '',
-    COMMENT  => '',
-  );
+  my %defaultTag = map { $_ => '' } @mp3Params;
   my %tagsSource = map { $_ => 1 } @$tagsSource;
   
   my $tagFromID3  = $tagsSource{id3}
@@ -669,8 +715,8 @@ sub encodeFile {
     ? $self->getTagsFromName($sourceFile, \@messages) || {}
     : {};
   
-  foreach $x(@mp3Params) {
-    foreach $tagSource(@$tagsSource) {
+  foreach my $x(@mp3Params) {
+    foreach my $tagSource(@$tagsSource) {
       # Once defined, a tag cannot be overriden
       next if exists $tag{$x} && defined $tag{$x} && $tag{$x} ne '';
       
@@ -694,7 +740,9 @@ sub encodeFile {
       push @messages, "=== $x($tagSource)=$tag{$x}" if $tag{$x} ne '';
     }
   }
-  $tag{'TRACKNUM'} = $1 if $tag{'TRACKNUM'} =~ /(\d+)\D/;
+  $tag{'TRACKNUM'} = $1
+    if defined $tag{'TRACKNUM'} && $tag{'TRACKNUM'} =~ /(\d+)\D/;
+  
   my %tagFlag = (
     TITLE    => 'tt',
     YEAR     => 'ty',
@@ -707,7 +755,7 @@ sub encodeFile {
   
   $lameParams .= join '',
     map {sprintf ' --%s "%s"', $tagFlag{$_}, $tag{$_}}
-    grep {$tag{$_} ne ''}
+    grep {defined $tag{$_} && $tag{$_} ne ''}
     sort keys %tagFlag;
   
   if ($self->{isWin32}) {
@@ -715,17 +763,28 @@ sub encodeFile {
     $targetFile =~ s/\//\\/g;
   }
   my $sourceSize = -s $sourceFile;
-  my $cmd = qq~$lameBinaryPath $lameParams "$sourceFile" "$targetFile"~;
-  push @messages, "=== RUN: $cmd";
-  `$cmd`;
-  my $targetSize = -e $targetFile ? -s $targetFile : 0;
-  if ($sourceSize && $targetSize) {
-    push @messages, "Size changed from "
-      .(sprintf '%.2d', $sourceSize / 1000)."K to "
-      .(sprintf '%.2d', $targetSize / 1000)."K.";
+  if (! $sourceSize) {
+    push @messages, "ERROR:Invalid source file, cannot read size";
   }
   else {
-    push @messages, 'ERROR:Could not convert';
+    my $cmd = qq~$lameBinaryPath $lameParams "$sourceFile" "$targetFile"~;
+    push @messages, $cmd;
+    `$cmd`;
+    if (! -e $targetFile) {
+      push @messages, "ERROR:Could not convert(no target file)";
+    }
+    else {
+      my $targetSize = -s $targetFile;
+      if ($targetSize) {
+        push @messages, "Size changed from "
+          .(sprintf '%.2d', $sourceSize / 1000)."K to "
+          .(sprintf '%.2d', $targetSize / 1000)."K.";
+      }
+      else {
+        push @messages, "ERROR:Could not convert: can not get target file size";
+        unlink $targetFile;
+      }
+    }
   }
   push @messages, ("=" x 40);
   
