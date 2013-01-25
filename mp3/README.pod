@@ -36,6 +36,8 @@ L<http://www.free-codecs.com/download/lame_encoder.htm>
 
 =item MonkeyAudio encoder
 
+I<Optional>
+
 This command-line binary can be used to convert ape files to wav files, 
 which can be then used as a source by the lame encoder to create 
 the MP3 files.
