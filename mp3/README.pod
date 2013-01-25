@@ -50,10 +50,11 @@ The source code and the pre-compiled window application can be downloaded here:
 L<http://www.monkeysaudio.com/download.html>
 
 In order to be able to read tags from the C<.ape> files, you need
-the L<http://search.cpan.org/~daniel/Audio-Musepack-0.7/lib/Audio/APE.pm Audio::APE>
-package installed from CPAN. This is a pure Perl package that can be unpacked
-by hand in the windows Activestate version, even if it does not show in the
-active repository.
+the C<Audio::APE> package installed from CPAN. This is a pure Perl package 
+that can be unpacked by hand in the windows Activestate version, 
+even if it does not show in the active repository.
+
+L<http://search.cpan.org/~daniel/Audio-Musepack-0.7/lib/Audio/APE.pm>
 
 
 =item FLAC encoder
@@ -69,8 +70,7 @@ can be downloaded here:
 L<http://flac.sourceforge.net/download.html>
 
 In order to be able to read tags from the C<.flac> files, you need
-the L<http://search.cpan.org/~daniel/Audio-FLAC-Header-2.4/Header.pm Audio::FLAC::Header>
-package installed from CPAN.
+the C<Audio::FLAC::Header> package installed from CPAN.
 
 
 =item Sound eXchange audio editor
