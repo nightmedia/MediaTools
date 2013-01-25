@@ -8,7 +8,7 @@ my $config = {
   isDebug         => 1,
 };
 
-ConvertFilesToMP3->new($config)->run(@_);
+ConvertFilesToMP3->new($config)->run(@ARGV);
 
 package ConvertFilesToMP3;
 use strict;
@@ -273,8 +273,8 @@ sub run {
   if ($fadeParams) {
     # fade=in:0.5,out:2.5
     my %fade;
-    my @fadeParams = map {$_=~ /^\s+//; $_=~ /\s+$//; $_} split /,/, $fadeParams;
-    map {$fade{lc $1} = $2 if $_ =~ /(in|out|trim)=(\d+|\d*\.\d+)/i} @fadeParams;
+    my @fadeParams = map {$_=~ s/^\s+//; $_=~ s/\s+$//; $_} split /,/, $fadeParams;
+    map {$fade{lc $1} = $2 if $_ =~ /(in|out|trim):(\d+|\d*\.\d+)/i} @fadeParams;
     $self->{fadeParams} = \%fade if %fade;
   }
   
@@ -367,9 +367,9 @@ sub workDir {
   my $minFileSize     = $self->{minFileSize};
   my $fadeParams      = $self->{fadeParams};
   if ($fadeParams) {
-    $self->quit("No soxBinaryPath defined")
+    $self->end("No soxBinaryPath defined")
       if ! $soxBinaryPath;
-    $self->quit("The soxBinaryPath is not valid: $soxBinaryPath")
+    $self->end("The soxBinaryPath is not valid: $soxBinaryPath")
       if ! -e $soxBinaryPath;
   }
   return if $maxNestingLevel < $level;
@@ -395,6 +395,7 @@ sub workDir {
   print "PATH: $currentPath\n";
   
   foreach my $fileName(@files) {
+    my $targetFile;
     my $sourceFile = "$currentPath/$fileName";
     if (-d $sourceFile) {
       my $newTargetPath = "$targetPath/$fileName";
@@ -406,7 +407,7 @@ sub workDir {
       next;
     };
     if ($fileName =~ /(.+)\.mp3$/oi) {
-      my $targetFile = $isProcessInPlace
+      $targetFile = $isProcessInPlace
         ? "$currentPath/temp.mp3"
         : "$targetPath/$fileName";
       
@@ -445,44 +446,52 @@ sub workDir {
       my $targetFileWav;
       if ($fileName =~ /\.flac$/oi) {
         print "CONVERT: $fileName to wav\n";
-        $fileName      = "$fRoot.wav";
-        $targetFileWav = "$currentPath/$fileName";
+        my $newFileName = "$fRoot.wav";
+        $targetFileWav = "$currentPath/$newFileName";
         unlink $targetFileWav
           if $isProcessInPlace && -e $targetFileWav;
         
-        `$flacBinaryPath -d "$sourceFile" -o "$targetFileWav"`;
+        my $cmd = qq~$flacBinaryPath -d "$sourceFile" -o "$targetFileWav"~;
+        push @messages, "=== RUN: $cmd";
+        my $out = `$cmd`;
         
         my $oldFile = $sourceFile;
-        $sourceFile = "$currentPath/$fileName";
+        $sourceFile = $targetFileWav;
         unlink $oldFile
-          if $isProcessInPlace && -e $sourceFile;
+          if $isProcessInPlace && -e $sourceFile && $self->{deleteSourceFiles};
+        print "FAILED TO CONVERT: $fileName to $newFileName\nERROR: \n===\n$out\n===\n"
+          if ! -e $sourceFile;
       }
-      my $targetFile = "$targetPath/$fRoot.mp3";
-      unlink $targetFile
-        if $isProcessInPlace && -e $targetFile;
-      
-      print "CONVERT: $fileName\n";
       
       my $tempTargetFile;
-      if ($fadeParams) {
+      if (-e $sourceFile && $fadeParams) {
         my $trim    = $fadeParams->{trim} || '';
         my $fadeIn  = $fadeParams->{in}   || 0;
         my $fadeOut = $fadeParams->{out}  || 0;
         if ($trim || $fadeIn || $fadeOut) {
           $tempTargetFile = "$targetPath/$fRoot.fade.wav";
           my $thisFadeParams;
-          $thisFadeParams   .= "$fadeIn 0 $fadeOut"
+          $thisFadeParams   .= " fade $fadeIn 0 $fadeOut"
             if $fadeIn || $fadeOut;
           $thisFadeParams   .= " trim =0 -$trim" if $trim;
           
           print "FADE: $thisFadeParams\n";
           
-          `$soxBinaryPath "$sourceFile" "$tempTargetFile" $thisFadeParams`;
+          my $cmd = qq~$soxBinaryPath "$sourceFile" "$tempTargetFile" $thisFadeParams~;
+          push @messages, "=== RUN: $cmd";
+          `$cmd`;
           
           $sourceFile = $tempTargetFile;
         }
       }
-      my $message = $self->encodeFile($sourceFile, $targetFile, $lameParams, $tagsSource);
+      my $message;
+      if (-e $sourceFile) {
+        $targetFile = "$targetPath/$fRoot.mp3";
+        unlink $targetFile
+          if $isProcessInPlace && -e $targetFile;
+        
+        $message = $self->encodeFile($sourceFile, $targetFile, $lameParams, $tagsSource);
+      }
       
       unlink $targetFileWav  if $targetFileWav;
       unlink $tempTargetFile if $tempTargetFile;
@@ -687,17 +696,17 @@ sub encodeFile {
   }
   $tag{'TRACKNUM'} = $1 if $tag{'TRACKNUM'} =~ /(\d+)\D/;
   my %tagFlag = (
-    TITLE    => tt,
-    YEAR     => ty,
-    ARTIST   => ta,
-    ALBUM    => tl,
-    GENRE    => tg,
-    TRACKNUM => tn,
-    COMMENT  => tc,
+    TITLE    => 'tt',
+    YEAR     => 'ty',
+    ARTIST   => 'ta',
+    ALBUM    => 'tl',
+    GENRE    => 'tg',
+    TRACKNUM => 'tn',
+    COMMENT  => 'tc',
   );
   
   $lameParams .= join '',
-    map {sprintf ' --%s "%s"',$tagFlag{$_}, $tag{$_}}
+    map {sprintf ' --%s "%s"', $tagFlag{$_}, $tag{$_}}
     grep {$tag{$_} ne ''}
     sort keys %tagFlag;
   
