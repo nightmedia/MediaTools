@@ -244,6 +244,9 @@ sub run {
     unshift @otherParams, $targetPath;
     $targetPath = $sourcePath;
   }
+  my $logPath = $self->{logPath} = $targetPath.'/activity.log';
+  unlink $logPath if -e $logPath;
+  
   my %params = map {
     $_ =~ /(\w+)=(.+)/ ? (lc $1, $2) : ()
   } @otherParams;
@@ -383,19 +386,26 @@ sub addMessage {
 
 sub printMessages {
   my $self     = shift;
+  my $logPath  = $self->{logPath};
   my $messages = $self->{opParams}{-MESSAGES} ||= [];
   my $errors   = $self->{opParams}{-ERRORS}   ||= [];
-  if (@$messages) {
-    print ''.("=" x 60)."\n";
-    print "PROCESS RESULTS:\n".(join "\n", @$messages)."\n";
-  }
+  my $hasLog;
   if (@$errors) {
-    print ''.("=" x 60)."\n";
-    print "ERRORS found:\n".(join "\n", @$errors)."\n";
+    $self->toLog(("=" x 60)."\n"
+      ."ERRORS found:\n".(join "\n", @$errors)."\n");
+    print "Errors were found\n";
+    $hasLog++;
+  }
+  if (@$messages) {
+    $self->toLog(("=" x 60)."\n"
+      ."PROCESS RESULTS:\n".(join "\n", @$messages)."\n");
+    $hasLog++;
   }
   else {
     print "OK\n";
   }
+  print "An activity log was created: $logPath\n"
+    if $hasLog;
   return;
 }
 
@@ -436,8 +446,7 @@ sub workDir {
   }
   my @files = sort grep(!/^\.\.?$/, readdir($dh));
   closedir ($dh);
-  
-  print "PATH: $currentPath\n";
+  $self->toLog("PATH: $currentPath");
   
   foreach my $fileName(@files) {
     my $targetFile;
@@ -455,7 +464,7 @@ sub workDir {
     my $fRoot = $1;
     my $fExt  = lc $2;
     if (! $processFileType->{$fExt}) {
-      print "SKIP: $fileName\n";
+      $self->toLog("SKIP: $fileName");
       next;
     }
     
@@ -467,7 +476,7 @@ sub workDir {
       unlink $targetFile
         if $isProcessInPlace && -e $targetFile;
       
-      print "CONVERT: $fileName\n";
+      $self->toLog("CONVERT: $fileName");
       
       my $message = $self->encodeFile($sourceFile, $targetFile, $lameParams, $tagsSource);
       if ($message) {
@@ -497,13 +506,14 @@ sub workDir {
     else {
       my $targetFileWav;
       if ($fExt eq 'flac') {
-        print "CONVERT: $fileName to wav\n";
+        $self->toLog("CONVERT: $fileName to wav");
         my $newFileName = "$fRoot.wav";
         $targetFileWav = "$currentPath/$newFileName";
         unlink $targetFileWav
           if $isProcessInPlace && -e $targetFileWav;
         
         my $cmd = qq~$flacBinaryPath -d "$sourceFile" -o "$targetFileWav"~;
+        utf8::downgrade($cmd);
         push @messages, $cmd;
         `$cmd`;
         
@@ -511,7 +521,7 @@ sub workDir {
         $sourceFile = $targetFileWav;
         unlink $oldFile
           if $isProcessInPlace && -e $sourceFile && $self->{deleteSourceFiles};
-        print "FAILED TO CONVERT: $fileName to $newFileName\n"
+        $self->toLog("FAILED TO CONVERT: $fileName to $newFileName")
           if ! -e $sourceFile;
       }
       
@@ -527,14 +537,15 @@ sub workDir {
             if $fadeIn || $fadeOut;
           $thisFadeParams   .= " trim =0 -$trim" if $trim;
           
-          print "FADE: $thisFadeParams\n";
+          $self->toLog("FADE: $thisFadeParams");
           
           my $cmd = qq~$soxBinaryPath "$sourceFile" "$tempTargetFile" $thisFadeParams~;
+          utf8::downgrade($cmd);
           push @messages, $cmd;
           `$cmd`;
           
           if (! -e $tempTargetFile) {
-            print "FAILED TO FADE: $sourceFile to $tempTargetFile\n"
+            $self->toLog("FAILED TO FADE: $sourceFile to $tempTargetFile")
           }
           else {
             $sourceFile = $tempTargetFile;
@@ -768,6 +779,8 @@ sub encodeFile {
   }
   else {
     my $cmd = qq~$lameBinaryPath $lameParams "$sourceFile" "$targetFile"~;
+    # See http://search.cpan.org/~jhi/perl-5.8.1/pod/perlunicode.pod
+    utf8::downgrade($cmd);
     push @messages, $cmd;
     `$cmd`;
     if (! -e $targetFile) {
@@ -791,4 +804,13 @@ sub encodeFile {
   @messages = () if ! $self->{isDebug};
   
   return \@messages;
+}
+
+sub toLog {
+  my $self    = shift;
+  my $message = shift;
+  my $logPath = $self->{logPath};
+  open(my $fh, '>>', $logPath) || die $!;
+  print $fh "$message\n";
+  close($fh);
 }
