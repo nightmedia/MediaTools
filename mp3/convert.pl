@@ -35,76 +35,6 @@ For efficient tagging, the script uses MP3::Info to read tags
 from the source files. If this package is not installed and tagging
 is explicitly expected to be read from source files, the script will fail.
 
-The script relies on a few external binaries, listed below.
-
-=over
-
-=item Lame MP3
-
-This is the MP3 encoder, a command-line application. 
-The latest version can be compiled from source, which can be retrieved here:
-
-L<http://lame.sourceforge.net/download.php>
-
-For Windows users, the pre-compiled binary can be downloaded from here:
-
-L<http://www.free-codecs.com/download/lame_encoder.htm>
-
-In order to be able to read tags from the C<.mp3> files, you need
-the C<MP3::Info> package installed from CPAN.
-
-
-=item MonkeyAudio encoder
-
-I<Optional>
-
-This command-line binary can be used to convert ape files to wav files, 
-which can be then used as a source by the lame encoder to create 
-the MP3 files.
-
-The source code and the pre-compiled window application can be downloaded here:
-
-L<http://www.monkeysaudio.com/download.html>
-
-In order to be able to read tags from the C<.ape> files, you need
-the C<Audio::APE> package installed from CPAN. This is a pure Perl package 
-that can be unpacked by hand in the windows Activestate version, 
-even if it does not show in the active repository.
-
-L<http://search.cpan.org/~daniel/Audio-Musepack-0.7/lib/Audio/APE.pm>
-
-
-=item FLAC encoder
-
-I<Optional>
-
-This command-line binary can be used to convert flac files to wav files, 
-which can be then used as a source by the lame encoder to create 
-the MP3 files.
-
-The source code and the pre-compiled binaries for all platforms
-can be downloaded here:
-
-L<http://flac.sourceforge.net/download.html>
-
-In order to be able to read tags from the C<.flac> files, you need
-the C<Audio::FLAC::Header> package installed from CPAN.
-
-
-=item Sound eXchange audio editor
-
-I<Optional>
-
-This command-line audio editor can be used in the conversion process
-to apply fade-in and fade-out for each track.
-
-The source code and the pre-compiled binaries for all platforms
-can be downloaded here:
-
-L<http://sox.sourceforge.net/>
-
-=back
-
 
 =head1 Usage
 
@@ -229,6 +159,77 @@ The above command will encode in-place the source files, applying to each file
 a fade-in of 0.1s, a fade-out of 0.5s and trimming the last 0.2s away 
 from the end of the file.
 
+=item Dependencies
+
+The script relies on a few external binaries, listed below.
+
+=over
+
+=item Lame MP3
+
+This is the MP3 encoder, a command-line application. 
+The latest version can be compiled from source, which can be retrieved here:
+
+L<http://lame.sourceforge.net/download.php>
+
+For Windows users, the pre-compiled binary can be downloaded from here:
+
+L<http://www.free-codecs.com/download/lame_encoder.htm>
+
+In order to be able to read tags from the C<.mp3> files, you need
+the C<MP3::Info> package installed from CPAN.
+
+
+=item MonkeyAudio encoder
+
+I<Optional>
+
+This command-line binary can be used to convert ape files to wav files, 
+which can be then used as a source by the lame encoder to create 
+the MP3 files.
+
+The source code and the pre-compiled window application can be downloaded here:
+
+L<http://www.monkeysaudio.com/download.html>
+
+In order to be able to read tags from the C<.ape> files, you need
+the C<Audio::APE> package installed from CPAN. This is a pure Perl package 
+that can be unpacked by hand in the windows Activestate version, 
+even if it does not show in the active repository.
+
+L<http://search.cpan.org/~daniel/Audio-Musepack-0.7/lib/Audio/APE.pm>
+
+
+=item FLAC encoder
+
+I<Optional>
+
+This command-line binary can be used to convert flac files to wav files, 
+which can be then used as a source by the lame encoder to create 
+the MP3 files.
+
+The source code and the pre-compiled binaries for all platforms
+can be downloaded here:
+
+L<http://flac.sourceforge.net/download.html>
+
+In order to be able to read tags from the C<.flac> files, you need
+the C<Audio::FLAC::Header> package installed from CPAN.
+
+
+=item Sound eXchange audio editor
+
+I<Optional>
+
+This command-line audio editor can be used in the conversion process
+to apply fade-in and fade-out for each track.
+
+The source code and the pre-compiled binaries for all platforms
+can be downloaded here:
+
+L<http://sox.sourceforge.net/>
+
+=back
 
 =cut
 sub new {

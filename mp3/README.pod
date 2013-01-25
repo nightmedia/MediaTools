@@ -16,6 +16,12 @@ and optionally can use the B<FLAC encoder> to decode C<.flac> files
 before converting, as well as the B<Sound eXchange audio editor> 
 to apply fade-in/fade-out and trim the files.
 
+You can call this script as described below. 
+If there are spaces in the folder name, you need to quote the path.
+
+ convert.pl /my/source/folder /target/folder preset=... tags=... fade=...
+
+Look in the script POD for details on the usage.
 
 =head1 Related binaries
 
