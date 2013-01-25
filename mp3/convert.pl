@@ -44,13 +44,25 @@ If there are spaces in the folder name, you need to quote the path.
  convert.pl /my/source/folder /target/folder preset=... tags=... fade=...
 
 If you are not providing an encoding type, the script will 
-use by default "lame --preset fast standard" on all the files in the path.
+use by default "lame --preset insane" on all the files in the path.
 
 =head2 Parameters
 
 All parameters are optional.
 
 =over
+
+=item options
+
+You can pass B<lame> options here directly. Keep in mind that the tag options
+are already used by the tagging feature.
+
+See this link for more info on the available options:
+
+L<http://lame.cvs.sourceforge.net/viewvc/lame/lame/USAGE>
+
+If all you need is to use a default preset, see the B<preset> parameter.
+
 
 =item preset
 
@@ -61,6 +73,8 @@ Examples of using acceptable values:
 
  preset=insane
  preset="fast extreme"
+
+If the preset contains spaces, you have to put it in quotes.
 
 Bitrate overview (mostly based on LAME 3.98.2 results)
 
@@ -78,6 +92,7 @@ Bitrate overview (mostly based on LAME 3.98.2 results)
  -V 9                            65             45...85
 
 See L<http://wiki.hydrogenaudio.org/index.php?title=LAME> for more info.
+
 
 =item process
 
@@ -297,10 +312,16 @@ sub run {
     mkdir($targetPath, 0777)
       || $self->end("Could not create path($targetPath): ".$!);
   }
+  my $options         = $params{options} || '';
   my $preset          = $params{preset}  || '';
   my $tagsSource      = $params{tags}    || '';
   my $fadeParams      = $params{fade}    || '';
   my $processFileType = $params{process} || '';
+  
+  if ($options) {
+    push @outParams, $options;
+    push @messages, "Using the following command line options: $options";
+  }
   
   if ($preset) {
     push @outParams, '--preset '.$preset;
@@ -309,6 +330,7 @@ sub run {
     push @messages, qq~No encoding standard was specified, using "$defaultEncoding"~;
     push @outParams, '--preset '.$defaultEncoding;
   }
+  
   
   if ($processFileType) {
     my %canProcessFileType = map {$_ => 1} @processFileType;

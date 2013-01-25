@@ -94,15 +94,9 @@ L<http://sox.sourceforge.net/>
 
 =back
 
+=head1 Coming soon
 
-B<Usage>
-
-You can call this script as described below. 
-If there are spaces in the folder name, you need to quote the path.
-
- convert.pl /my/source/folder /target/folder preset=... tags=... fade=...
-
-If you are not providing an encoding type, the script will 
-use by default "lame --preset fast standard" on all the files in the path.
+Support for converting from B<OggVorbis> using C<oggdec>:
+L<http://www.rarewares.org/ogg-oggdec.php>
 
 =cut
