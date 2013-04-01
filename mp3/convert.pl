@@ -381,13 +381,13 @@ sub run {
   
   my $lameParams = join ' ', @outParams;
   my $fadeMessage = $self->{fadeParams}
-    ? "Fade params were specified, and can only applied to wav files.
+    ? "Fade params were specified, and can only be applied to wav files.
 If the source files are mp3, the fade params will be ignored.\n"
     : '';
   print ''.("=" x 60)."\n- "
     .(join "\n- ", @messages)
     .qq~\n\nThe files in the following path:\n\n\t$sourcePath\n
-will be converted using the following lame params:
+will be converted using the following params for the lame converter:
 
 \t$lameBinaryPath $lameParams
 
@@ -395,8 +395,8 @@ $fadeMessage
 You have 5 seconds to stop this...\n~;
   sleep 5;
   
-  $opParams->{-LAME_PARAMS} = $lameParams;
-  $opParams->{-ID3V2_TAGS}  = \@tagsSource;
+  $opParams->{lameParams} = $lameParams;
+  $opParams->{tagsSource} = \@tagsSource;
   
   $self->workDir($sourcePath, $targetPath);
   $self->printMessages();
@@ -423,7 +423,7 @@ sub makeAbsolutePath {
 sub addError {
   my $self     = shift;
   my $message  = shift;
-  my $messages = $self->{opParams}{-ERRORS} ||= [];
+  my $messages = $self->{opParams}{_errors} ||= [];
   push @$messages, $message;
   return;
 }
@@ -431,7 +431,7 @@ sub addError {
 sub addMessage {
   my $self     = shift;
   my $message  = shift;
-  my $messages = $self->{opParams}{-MESSAGES} ||= [];
+  my $messages = $self->{opParams}{_messages} ||= [];
   push @$messages, $message;
   return;
 }
@@ -439,8 +439,8 @@ sub addMessage {
 sub printMessages {
   my $self     = shift;
   my $logPath  = $self->{logPath};
-  my $messages = $self->{opParams}{-MESSAGES} ||= [];
-  my $errors   = $self->{opParams}{-ERRORS}   ||= [];
+  my $messages = $self->{opParams}{_messages} ||= [];
+  my $errors   = $self->{opParams}{_errors}   ||= [];
   my $hasLog;
   if (@$errors) {
     $self->toLog(("=" x 60)."\n"
@@ -489,8 +489,8 @@ sub workDir {
   
   my ($dh, @errors, @messages);
   my $opParams   = $self->{opParams};
-  my $tagsSource = $opParams->{-ID3V2_TAGS};
-  my $lameParams = $opParams->{-LAME_PARAMS};
+  my $tagsSource = $opParams->{tagsSource};
+  my $lameParams = $opParams->{lameParams};
   
   if (! opendir ($dh, $currentPath)) {
     $self->addError($currentPath);
