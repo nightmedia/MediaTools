@@ -368,7 +368,7 @@ sub run {
     $fadeParams =~ s/\s+//g;
     my @fadeParams = split /,/, $fadeParams;
     my %fadeParams = map {
-      $_ =~ /(in|out|trim):(\d+|\d*\.\d+)/i
+      $_ =~ /^(in|out|trim):(\d+|\d*\.\d+)$/i
         ? (lc $1, $2)
         : ()
     } @fadeParams;
@@ -487,6 +487,7 @@ sub workDir {
   }
   my $isProcessInPlace = $currentPath eq $targetPath ? 1 : 0;
   
+  print "Fade: ".(Dumper($fadeParams))."\n";
   my ($dh, @errors, @messages);
   my $opParams   = $self->{opParams};
   my $tagsSource = $opParams->{tagsSource};
